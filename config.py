@@ -1,4 +1,4 @@
-TOKEN = "7173570718:AAE9n1btkKzYTxaOzDQJj7dRMMFTp8fe0ts"
+TOKEN = ""
 DEPARTMENTS = {
     'programmers': 'Программисты',
     'sales': 'Отдел продаж'
@@ -45,4 +45,5 @@ FAQ = {
         'question': 'Как с вами связаться?',
         'answer': 'Телефон: +7 (495) 123-45-67\nEmail: support@продаемвсе.рф\nГрафик работы: Пн-Пт 9:00-18:00'
     }
+
 }
