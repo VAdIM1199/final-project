@@ -1,4 +1,4 @@
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler
 from logic import SupportDB, FAQProcessor
 from config import TOKEN, DEPARTMENTS
@@ -17,6 +17,11 @@ def departments_menu():
     return ReplyKeyboardMarkup([
         [DEPARTMENTS['programmers'], DEPARTMENTS['sales']],
         ['Назад']
+    ], resize_keyboard=True)
+
+def tickets_menu():
+    return ReplyKeyboardMarkup([
+        ['Удалить заявку', 'Назад']
     ], resize_keyboard=True)
 
 async def start(update, context):
@@ -59,7 +64,49 @@ async def show_tickets(update, context):
         dept = DEPARTMENTS.get(ticket[1], ticket[1])
         text += f"#{ticket[0]} - {dept}\n{ticket[2][:50]}...\n\n"
     
-    await update.message.reply_text(text, reply_markup=main_menu())
+    await update.message.reply_text(text, reply_markup=tickets_menu())
+
+async def delete_ticket_start(update, context):
+    user_id = update.message.from_user.id
+    tickets = db.get_user_tickets(user_id)
+    
+    if not tickets:
+        await update.message.reply_text(" У вас нет заявок для удаления", reply_markup=main_menu())
+        return
+    
+    user_data[user_id] = {'state': 'delete_ticket', 'tickets': tickets}
+    
+    text = "Ваши заявки (укажите номер для удаления):\n\n"
+    for ticket in tickets:
+        dept = DEPARTMENTS.get(ticket[1], ticket[1])
+        text += f"#{ticket[0]} - {dept}\n{ticket[2][:50]}...\n\n"
+    
+    await update.message.reply_text(text, reply_markup=ReplyKeyboardRemove())
+
+async def delete_ticket_finish(update, context):
+    user_id = update.message.from_user.id
+    text = update.message.text.strip()
+    
+    if not text.isdigit():
+        await update.message.reply_text("Пожалуйста, введите номер заявки (только цифры)", reply_markup=tickets_menu())
+        return
+    
+    ticket_id = int(text)
+    user_tickets = user_data.get(user_id, {}).get('tickets', [])
+    ticket_exists = any(ticket[0] == ticket_id for ticket in user_tickets)
+    
+    if not ticket_exists:
+        await update.message.reply_text("Заявка с таким номером не найдена или не принадлежит вам", reply_markup=tickets_menu())
+        return
+
+    success = db.delete_ticket(ticket_id, user_id)
+    
+    if success:
+        await update.message.reply_text(f"Заявка #{ticket_id} успешно удалена", reply_markup=main_menu())
+    else:
+        await update.message.reply_text("Ошибка при удалении заявки", reply_markup=main_menu())
+    
+    user_data.pop(user_id, None)
 
 async def handle_message(update, context):
     text = update.message.text
@@ -81,6 +128,9 @@ async def handle_message(update, context):
         user_data.pop(user_id, None)
         await start(update, context)
         return
+    elif text == 'Удалить заявку':
+        await delete_ticket_start(update, context)
+        return
     
     state = user_data.get(user_id, {}).get('state')
     
@@ -100,6 +150,9 @@ async def handle_message(update, context):
         await update.message.reply_text(f"Заявка #{ticket_id} создана!\nОтдел: {dept_name}", reply_markup=main_menu())
         user_data.pop(user_id, None)
     
+    elif state == 'delete_ticket':
+        await delete_ticket_finish(update, context)
+    
     else:
         answer = faq.get_answer(text)
         if answer:
@@ -109,7 +162,6 @@ async def handle_message(update, context):
 
 def main():
     app = Application.builder().token(TOKEN).build()
-    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("my_tickets", show_tickets))

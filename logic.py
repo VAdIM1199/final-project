@@ -33,6 +33,12 @@ class SupportDB:
         cursor = self.conn.cursor()
         cursor.execute('SELECT id, department, problem, created_at FROM tickets WHERE user_id = ? ORDER BY id DESC', (user_id,))
         return cursor.fetchall()
+    
+    def delete_ticket(self, ticket_id, user_id):
+        cursor = self.conn.cursor()
+        cursor.execute('DELETE FROM tickets WHERE id = ? AND user_id = ?', (ticket_id, user_id))
+        self.conn.commit()
+        return cursor.rowcount > 0
 
 class FAQProcessor:
     def get_answer(self, text):
